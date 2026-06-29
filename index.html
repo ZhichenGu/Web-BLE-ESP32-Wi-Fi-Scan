@@ -1,72 +1,74 @@
 <!DOCTYPE html>
 <html lang="zh">
-
 <head>
-<meta charset="UTF-8">
-<title>ESP32 IoT Debug Console</title>
-
-<link rel="stylesheet" href="style.css">
-
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <meta charset="UTF-8">
+  <title>ESP32 IoT Debug Console</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
-
 <body>
 
-<h2>ESP32 IoT 控制台（Debug版）</h2>
+<h2>ESP32 IoT 控制台</h2>
 
 <div class="container">
 
-<!-- ========== BLE ========== -->
-<div class="panel">
+  <!-- ========== BLE ========== -->
+  <div class="panel">
+    <h3>🔵 BLE 配网</h3>
 
-<h3>🔵 BLE 配网（带握手）</h3>
+    <button id="connectBtn">连接 ESP32</button>
+    <div id="bleStatus" class="status-badge disconnected">未连接</div>
 
-<button id="connectBtn">连接ESP32</button>
-<button id="scanBtn">扫描WiFi</button>
+    <hr>
 
-<select id="ssidList"></select>
+    <h3>📶 WiFi 扫描</h3>
+    <button id="scanBtn" disabled>扫描 WiFi</button>
+    <select id="ssidList"><option value="">-- 请先扫描 --</option></select>
+    <input id="password" type="password" placeholder="WiFi 密码">
+    <button id="applyBtn" disabled>连接 WiFi</button>
 
-<input id="password" type="password" placeholder="WiFi密码">
+    <hr>
 
-<button id="applyBtn">连接WiFi</button>
+    <h3>🟣 MQTT 配置（BLE 下发）</h3>
+    <input id="mqttHost" placeholder="Broker 地址（如 broker.hivemq.com）">
+    <input id="mqttPort" type="number" placeholder="端口（默认 1883）" value="1883">
+    <input id="mqttUser" placeholder="MQTT 用户名（可空）">
+    <input id="mqttPassInput" type="password" placeholder="MQTT 密码（可空）">
+    <button id="sendMqttBtn" disabled>下发 MQTT 配置</button>
 
-<hr>
+    <hr>
 
-<h3>🟢 ESP32反馈</h3>
-<pre id="bleLog"></pre>
+    <h3>🟢 ESP32 反馈</h3>
+    <button id="clearBleBtn" class="btn-sm">清空日志</button>
+    <pre id="bleLog"></pre>
+  </div>
 
-<hr>
+  <!-- ========== MQTT / OTA ========== -->
+  <div class="panel">
+    <h3>📡 浏览器 MQTT 连接</h3>
+    <p class="hint">用于从浏览器直接推送指令（需要 WSS broker）</p>
+    <input id="mqttWsUrl" placeholder="wss://broker.hivemq.com:8884/mqtt">
+    <input id="mqttWsUser" placeholder="MQTT 用户名（可空）">
+    <input id="mqttWsPass" type="password" placeholder="MQTT 密码（可空）">
+    <button id="mqttConnectBtn">连接 MQTT</button>
+    <div id="mqttStatus" class="status-badge disconnected">未连接</div>
 
-<h3>🟣 MQTT配置（BLE下发）</h3>
+    <hr>
 
-<input id="mqttUrl" placeholder="wss://xxx:8884/mqtt">
-<input id="mqttUser" placeholder="MQTT用户名">
-<input id="mqttPass" type="password" placeholder="MQTT密码">
+    <h3>🚀 OTA 升级</h3>
+    <p class="hint">通过 MQTT 推送固件 URL 给 ESP32</p>
+    <input id="firmwareUrl" placeholder="http://yourserver.com/firmware.bin">
+    <button id="otaBtn" disabled>推送 OTA 指令</button>
 
-<button id="sendMqttBtn">下发MQTT配置</button>
+    <hr>
 
-</div>
-
-<!-- ========== MQTT / OTA ========== -->
-<div class="panel">
-
-<h3>📡 MQTT连接</h3>
-<button id="mqttConnectBtn">连接MQTT</button>
-
-<hr>
-
-<h3>🚀 OTA升级</h3>
-
-<input id="firmwareUrl" placeholder="firmware.bin URL">
-<button id="otaBtn">推送OTA</button>
-
-<pre id="otaLog"></pre>
-
-</div>
+    <h3>📋 MQTT / OTA 日志</h3>
+    <button id="clearOtaBtn" class="btn-sm">清空日志</button>
+    <pre id="otaLog"></pre>
+  </div>
 
 </div>
 
 <script src="app.js"></script>
-
 </body>
 </html>

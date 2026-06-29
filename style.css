@@ -1,43 +1,141 @@
+* {
+  box-sizing: border-box;
+}
+
 body {
-  font-family: Arial;
+  font-family: Arial, sans-serif;
   margin: 30px;
-  background: #f7f7f7;
+  background: #f0f2f5;
+  color: #222;
 }
 
 h2 {
   text-align: center;
+  margin-bottom: 20px;
+  font-size: 1.4rem;
+  color: #333;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 10px 0 6px;
+  color: #444;
 }
 
 .container {
   display: flex;
   gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .panel {
   flex: 1;
-  background: white;
-  padding: 15px;
-  border-radius: 10px;
-  border: 1px solid #ddd;
+  background: #fff;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid #dde1e7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 button {
   width: 100%;
   padding: 10px;
   margin: 5px 0;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9rem;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+button.btn-sm {
+  width: auto;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  background: #64748b;
+  float: right;
+  margin-bottom: 4px;
+}
+
+button.btn-sm:hover {
+  background: #475569;
 }
 
 input, select {
   width: 100%;
-  height: 40px;
-  margin: 5px 0;
+  height: 38px;
+  margin: 4px 0;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #fff;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 14px 0;
 }
 
 pre {
-  background: #111;
-  color: #0f0;
-  height: 200px;
-  overflow: auto;
+  background: #0f172a;
+  color: #4ade80;
+  height: 180px;
+  overflow-y: auto;
   padding: 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  clear: both;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin: 2px 0 6px;
+}
+
+/* 状态徽章 */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: bold;
+  margin: 4px 0 8px;
+}
+
+.status-badge.disconnected {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.status-badge.connected {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+@media (max-width: 700px) {
+  .container {
+    flex-direction: column;
+  }
 }
