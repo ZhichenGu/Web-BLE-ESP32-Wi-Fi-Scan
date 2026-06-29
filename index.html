@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 WiFi 配网</title>
+<style>
+  :root {
+    --green:  #00e5a0;
+    --green2: #00b87a;
+    --bg:     #0d1117;
+    --bg2:    #161b22;
+    --bg3:    #1e2530;
+    --border: #30363d;
+    --text:   #e6edf3;
+    --muted:  #8b949e;
+    --danger: #f85149;
+    --warn:   #f0a929;
+    --radius: 10px;
+    --font:   'JetBrains Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  /* ─── header ─────────────────── */
+  header {
+    width: 100%;
+    max-width: 560px;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--green);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .logo svg { width: 20px; height: 20px; }
+  h1 { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+  h1 span { color: var(--green); }
+  .subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ─── card ───────────────────── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 560px;
+    margin-bottom: 1rem;
+  }
+
+  /* ─── step header ────────────── */
+  .step-label {
+    font-size: 10px;
+    color: var(--green);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: .6rem;
+  }
+  .step-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: .3rem;
+  }
+  .step-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 1.2rem; }
+
+  /* ─── button ─────────────────── */
+  button {
+    font-family: var(--font);
+    font-size: 13px;
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: .55rem 1.1rem;
+    transition: opacity .15s, transform .1s;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+  .btn-primary {
+    background: var(--green);
+    color: #0d1117;
+    font-weight: 700;
+  }
+  .btn-secondary {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--green2); }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--green); }
+
+  /* ─── status pill ────────────── */
+  #ble-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: .3rem .75rem;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .4px;
+    margin-bottom: 1rem;
+    transition: all .3s;
+  }
+  #ble-status.disconnected { background: rgba(248,81,73,.12); color: var(--danger); border: 1px solid rgba(248,81,73,.25); }
+  #ble-status.connecting   { background: rgba(240,169,41,.12); color: var(--warn);   border: 1px solid rgba(240,169,41,.25); }
+  #ble-status.connected    { background: rgba(0,229,160,.1);   color: var(--green);  border: 1px solid rgba(0,229,160,.2); }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .dot.pulse { animation: pulse 1.4s ease infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+  /* ─── scan button row ────────── */
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+
+  /* ─── wifi list ──────────────── */
+  #wifi-list { margin-top: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+
+  .wifi-item {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .7rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .wifi-item:hover { border-color: var(--green); background: rgba(0,229,160,.04); }
+  .wifi-item.selected { border-color: var(--green); background: rgba(0,229,160,.07); }
+
+  .signal-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .signal-bars span {
+    width: 4px;
+    border-radius: 1px;
+    background: var(--border);
+    transition: background .2s;
+  }
+  .signal-bars span.lit { background: var(--green); }
+  .signal-bars span:nth-child(1) { height: 5px; }
+  .signal-bars span:nth-child(2) { height: 8px; }
+  .signal-bars span:nth-child(3) { height: 11px; }
+  .signal-bars span:nth-child(4) { height: 14px; }
+
+  .wifi-name { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wifi-enc { font-size: 10px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+
+  /* ─── input ──────────────────── */
+  input[type=text], input[type=password] {
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: .55rem .9rem;
+    width: 100%;
+    margin-top: .4rem;
+    margin-bottom: .8rem;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus { border-color: var(--green); }
+  label { font-size: 11px; color: var(--muted); display: block; }
+
+  /* ─── result ─────────────────── */
+  #result {
+    margin-top: 1rem;
+    padding: .9rem 1rem;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+    line-height: 1.6;
+  }
+  #result.success { background: rgba(0,229,160,.08); border: 1px solid rgba(0,229,160,.2); color: var(--green); }
+  #result.error   { background: rgba(248,81,73,.08);  border: 1px solid rgba(248,81,73,.2);  color: var(--danger); }
+  #result.info    { background: rgba(240,169,41,.08); border: 1px solid rgba(240,169,41,.2); color: var(--warn); }
+
+  /* ─── log ────────────────────── */
+  #log {
+    margin-top: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+    max-height: 120px;
+    overflow-y: auto;
+    display: none;
+  }
+  #log .ts { color: rgba(0,229,160,.5); user-select: none; }
+
+  /* ─── spinner ────────────────── */
+  .spin {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(0,229,160,.2);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── compat warning ─────────── */
+  #compat-warn {
+    display: none;
+    background: rgba(240,169,41,.1);
+    border: 1px solid rgba(240,169,41,.3);
+    border-radius: 8px;
+    padding: .8rem 1rem;
+    font-size: 12px;
+    color: var(--warn);
+    margin-bottom: 1rem;
+    max-width: 560px;
+    width: 100%;
+  }
+
+  /* ─── section collapse ────────── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  footer {
+    margin-top: 2rem;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    max-width: 560px;
+  }
+  footer a { color: rgba(0,229,160,.6); text-decoration: none; }
+  footer a:hover { color: var(--green); }
+</style>
+</head>
+<body>
+
+<div id="compat-warn">
+  ⚠ 此浏览器不支持 Web Bluetooth API。请使用 <strong>Chrome 或 Edge（桌面版）</strong>。Safari / Firefox 暂不支持。
+</div>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="7" width="16" height="6" rx="2" stroke="#00e5a0" stroke-width="1.3"/>
+      <rect x="7" y="2" width="6" height="16" rx="2" stroke="#00e5a0" stroke-width="1.3" opacity=".4"/>
+      <circle cx="10" cy="10" r="2" fill="#00e5a0"/>
+    </svg>
+  </div>
+  <div>
+    <h1>ESP32 <span>WiFi</span> 配网</h1>
+    <div class="subtitle">通过蓝牙为设备配置网络连接</div>
+  </div>
+</header>
+
+<!-- ─ STEP 1: BLE 连接 ────────────────────────────────── -->
+<div class="card">
+  <div class="step-label">Step 01</div>
+  <div class="step-title">连接 ESP32</div>
+  <div class="step-desc">确保 ESP32 已上电并烧录配网固件。点击"搜索设备"后，在弹出窗口中选择 <strong>ESP32-WiFi-Setup</strong>。</div>
+
+  <div id="ble-status" class="disconnected">
+    <span class="dot"></span>
+    <span id="ble-status-text">未连接</span>
+  </div>
+
+  <div class="row">
+    <button class="btn-primary" id="btn-connect">搜索设备</button>
+    <button class="btn-secondary" id="btn-disconnect" disabled>断开</button>
+  </div>
+</div>
+
+<!-- ─ STEP 2: 扫描 WiFi ──────────────────────────────── -->
+<div class="card section" id="section-scan">
+  <div class="step-label">Step 02</div>
+  <div class="step-title">选择 WiFi 网络</div>
+  <div class="step-desc">让 ESP32 扫描附近的 WiFi，然后点击你要连接的网络。</div>
+
+  <div class="row">
+    <button class="btn-primary" id="btn-scan">扫描 WiFi</button>
+    <span id="scan-spinner" style="display:none"><span class="spin"></span> 扫描中...</span>
+  </div>
+
+  <div id="wifi-list"></div>
+</div>
+
+<!-- ─ STEP 3: 输入密码 & 连接 ──────────────────────── -->
+<div class="card section" id="section-connect">
+  <div class="step-label">Step 03</div>
+  <div class="step-title">输入密码</div>
+  <div class="step-desc">已选网络: <strong id="chosen-ssid" style="color:var(--green)">—</strong></div>
+
+  <label>密码（开放网络留空）</label>
+  <input type="password" id="input-pass" placeholder="••••••••">
+
+  <div class="row">
+    <button class="btn-primary" id="btn-go">连接</button>
+    <button class="btn-secondary" id="btn-back">← 重新选择</button>
+  </div>
+
+  <div id="result"></div>
+</div>
+
+<!-- ─ 调试日志 ────────────────────────────────────────── -->
+<div class="card" id="log-card" style="display:none">
+  <div class="step-label">调试日志</div>
+  <div id="log"></div>
+</div>
+
+<footer>
+  固件源码见 <a href="esp32_ble_wifi.ino">esp32_ble_wifi.ino</a> · Web Bluetooth 仅支持 Chrome / Edge 桌面版
+</footer>
+
+<script>
+  // ── UUID（与 .ino 保持一致）──────────────────────────────
+  const SERVICE_UUID   = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+  const SCAN_UUID      = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+  const SSID_UUID      = 'beb5483e-36e1-4688-b7f5-ea07361b26a9';
+  const PASS_UUID      = 'beb5483e-36e1-4688-b7f5-ea07361b26aa';
+  const CMD_UUID       = 'beb5483e-36e1-4688-b7f5-ea07361b26ab';
+  const STATUS_UUID    = 'beb5483e-36e1-4688-b7f5-ea07361b26ac';
+
+  // ── 状态 ─────────────────────────────────────────────────
+  let device, server, service;
+  let charScan, charSsid, charPass, charCmd, charStatus;
+  let wifiChunks = [];
+  let selectedSSID = '';
+
+  // ── 元素 ─────────────────────────────────────────────────
+  const elStatus     = document.getElementById('ble-status');
+  const elStatusTxt  = document.getElementById('ble-status-text');
+  const btnConnect   = document.getElementById('btn-connect');
+  const btnDisconn   = document.getElementById('btn-disconnect');
+  const btnScan      = document.getElementById('btn-scan');
+  const scanSpinner  = document.getElementById('scan-spinner');
+  const wifiList     = document.getElementById('wifi-list');
+  const secScan      = document.getElementById('section-scan');
+  const secConn      = document.getElementById('section-connect');
+  const chosenSsid   = document.getElementById('chosen-ssid');
+  const inputPass    = document.getElementById('input-pass');
+  const btnGo        = document.getElementById('btn-go');
+  const btnBack      = document.getElementById('btn-back');
+  const elResult     = document.getElementById('result');
+  const logCard      = document.getElementById('log-card');
+  const logEl        = document.getElementById('log');
+
+  // ── 兼容检测 ─────────────────────────────────────────────
+  if (!navigator.bluetooth) {
+    document.getElementById('compat-warn').style.display = 'block';
+    btnConnect.disabled = true;
+  }
+
+  // ── 日志 ─────────────────────────────────────────────────
+  function log(msg) {
+    logCard.style.display = 'block';
+    logEl.style.display = 'block';
+    const ts = new Date().toLocaleTimeString();
+    logEl.innerHTML += `<div><span class="ts">[${ts}]</span> ${msg}</div>`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ── BLE 状态 UI ──────────────────────────────────────────
+  function setStatus(s, text) {
+    elStatus.className = s;
+    elStatusTxt.textContent = text;
+    const dot = elStatus.querySelector('.dot');
+    dot.className = 'dot' + (s === 'connecting' ? ' pulse' : '');
+  }
+
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+    if (id) document.getElementById(id).classList.add('active');
+  }
+
+  // ── 连接 ESP32 ────────────────────────────────────────────
+  btnConnect.addEventListener('click', async () => {
+    try {
+      setStatus('connecting', '搜索中...');
+      log('正在搜索 BLE 设备...');
+
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+        optionalServices: [SERVICE_UUID]
+      });
+
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      setStatus('connecting', '连接中...');
+      log(`发现设备: ${device.name}`);
+
+      server  = await device.gatt.connect();
+      service = await server.getPrimaryService(SERVICE_UUID);
+
+      charScan   = await service.getCharacteristic(SCAN_UUID);
+      charSsid   = await service.getCharacteristic(SSID_UUID);
+      charPass   = await service.getCharacteristic(PASS_UUID);
+      charCmd    = await service.getCharacteristic(CMD_UUID);
+      charStatus = await service.getCharacteristic(STATUS_UUID);
+
+      // 订阅通知
+      await charScan.startNotifications();
+      charScan.addEventListener('characteristicvaluechanged', onScanData);
+
+      await charStatus.startNotifications();
+      charStatus.addEventListener('characteristicvaluechanged', onStatusData);
+
+      setStatus('connected', '已连接');
+      log('BLE 连接成功 ✓');
+      btnConnect.disabled = true;
+      btnDisconn.disabled = false;
+      showSection('section-scan');
+
+    } catch (e) {
+      setStatus('disconnected', '未连接');
+      log(`错误: ${e.message}`);
+    }
+  });
+
+  // ── 断开 ─────────────────────────────────────────────────
+  btnDisconn.addEventListener('click', () => {
+    if (device && device.gatt.connected) device.gatt.disconnect();
+  });
+
+  function onDisconnected() {
+    setStatus('disconnected', '已断开');
+    log('设备已断开连接');
+    btnConnect.disabled = false;
+    btnDisconn.disabled = true;
+    showSection(null);
+  }
+
+  // ── 扫描 WiFi ─────────────────────────────────────────────
+  btnScan.addEventListener('click', async () => {
+    wifiList.innerHTML = '';
+    wifiChunks = [];
+    btnScan.disabled = true;
+    scanSpinner.style.display = 'inline';
+    log('发送 scan 命令...');
+    const enc = new TextEncoder();
+    await charCmd.writeValue(enc.encode('scan'));
+  });
+
+  // ── 接收 WiFi 扫描数据（分包）────────────────────────────
+  function onScanData(event) {
+    const raw = new TextDecoder().decode(event.target.value);
+    // 格式: "0:JSON片段" 或 "1:最终JSON片段"
+    const done = raw.charAt(0) === '1';
+    const chunk = raw.slice(2);
+    wifiChunks.push(chunk);
+
+    if (done) {
+      const fullJson = wifiChunks.join('');
+      wifiChunks = [];
+      try {
+        const networks = JSON.parse(fullJson);
+        renderWifiList(networks);
+      } catch (e) {
+        log(`JSON解析失败: ${e.message}`);
+      }
+    }
+  }
+
+  // ── 渲染 WiFi 列表 ────────────────────────────────────────
+  function renderWifiList(networks) {
+    btnScan.disabled = false;
+    scanSpinner.style.display = 'none';
+
+    // 按信号强度排序
+    networks.sort((a, b) => b.rssi - a.rssi);
+    wifiList.innerHTML = '';
+
+    if (networks.length === 0) {
+      wifiList.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:1rem">未发现 WiFi 网络</div>';
+      return;
+    }
+
+    log(`扫描完成，找到 ${networks.length} 个网络`);
+
+    networks.forEach(net => {
+      const bars = rssiToBars(net.rssi);
+      const item = document.createElement('div');
+      item.className = 'wifi-item';
+      item.innerHTML = `
+        <div class="signal-bars">
+          <span class="${bars >= 1 ? 'lit' : ''}"></span>
+          <span class="${bars >= 2 ? 'lit' : ''}"></span>
+          <span class="${bars >= 3 ? 'lit' : ''}"></span>
+          <span class="${bars >= 4 ? 'lit' : ''}"></span>
+        </div>
+        <span class="wifi-name">${escHtml(net.ssid)}</span>
+        <span style="font-size:10px;color:var(--muted)">${net.rssi} dBm</span>
+        ${net.enc ? '<span class="wifi-enc">🔒</span>' : '<span class="wifi-enc" style="opacity:.4">开放</span>'}
+      `;
+      item.addEventListener('click', () => selectWifi(net.ssid, item));
+      wifiList.appendChild(item);
+    });
+  }
+
+  function rssiToBars(rssi) {
+    if (rssi >= -55) return 4;
+    if (rssi >= -67) return 3;
+    if (rssi >= -75) return 2;
+    return 1;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── 选择 WiFi ────────────────────────────────────────────
+  function selectWifi(ssid, el) {
+    document.querySelectorAll('.wifi-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedSSID = ssid;
+    chosenSsid.textContent = ssid;
+    inputPass.value = '';
+    elResult.style.display = 'none';
+    showSection('section-connect');
+  }
+
+  btnBack.addEventListener('click', () => {
+    showSection('section-scan');
+  });
+
+  // ── 接收 ESP32 状态通知 ───────────────────────────────────
+  function onStatusData(event) {
+    const status = new TextDecoder().decode(event.target.value);
+    log(`ESP32 状态: ${status}`);
+
+    if (status === 'scanning') {
+      // 已收到 scanning 状态，继续等待
+    } else if (status === 'scan_done') {
+      // scan 数据通过 charScan 已经来了
+    } else if (status === 'connecting') {
+      showResult('info', '⏳ 正在连接 WiFi，最多等待 10 秒...');
+    } else if (status.startsWith('connected:')) {
+      const ip = status.split(':')[1];
+      showResult('success', `✓ WiFi 连接成功！\nIP 地址: ${ip}`);
+      btnGo.disabled = false;
+    } else if (status === 'error:failed') {
+      showResult('error', '✗ 连接失败。请检查密码是否正确，或靠近路由器重试。');
+      btnGo.disabled = false;
+    } else if (status === 'error:no_ssid') {
+      showResult('error', '✗ 未收到 SSID，请重新选择网络。');
+      btnGo.disabled = false;
+    }
+  }
+
+  function showResult(type, msg) {
+    elResult.style.display = 'block';
+    elResult.className = type;
+    elResult.style.whiteSpace = 'pre-wrap';
+    elResult.textContent = msg;
+  }
+
+  // ── 发送 SSID + 密码 + connect 命令 ──────────────────────
+  btnGo.addEventListener('click', async () => {
+    if (!selectedSSID) { showResult('error', '请先选择一个 WiFi 网络。'); return; }
+    const pass = inputPass.value;
+
+    btnGo.disabled = true;
+    elResult.style.display = 'none';
+    log(`发送 SSID: ${selectedSSID}`);
+
+    const enc = new TextEncoder();
+    await charSsid.writeValue(enc.encode(selectedSSID));
+    await charPass.writeValue(enc.encode(pass));
+    await charCmd.writeValue(enc.encode('connect'));
+
+    log('已发送连接指令，等待 ESP32 响应...');
+  });
+</script>
+</body>
+</html>
