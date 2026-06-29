@@ -54,6 +54,24 @@ void notify(String msg){
 }
 
 /* =========================
+   BLE结构检查（重点新增）
+========================= */
+void printBLECheck(){
+
+  Serial.println("\n========== BLE STRUCT CHECK ==========");
+
+  Serial.println(ssidChar  ? "SSID_CHAR   OK" : "SSID_CHAR   MISSING");
+  Serial.println(passChar  ? "PASS_CHAR   OK" : "PASS_CHAR   MISSING");
+  Serial.println(applyChar ? "APPLY_CHAR  OK" : "APPLY_CHAR  MISSING");
+  Serial.println(mqttChar  ? "MQTT_CHAR   OK" : "MQTT_CHAR   MISSING");
+  Serial.println(statusChar? "STATUS_CHAR OK" : "STATUS_CHAR MISSING");
+  Serial.println(scanChar  ? "SCAN_CHAR   OK" : "SCAN_CHAR   MISSING");
+  Serial.println(listChar  ? "LIST_CHAR   OK" : "LIST_CHAR   MISSING");
+
+  Serial.println("======================================\n");
+}
+
+/* =========================
    WiFi扫描
 ========================= */
 void runScan(){
@@ -127,6 +145,34 @@ void callback(char* topic, byte* payload, unsigned int length){
   }
 }
 
+/* =========================
+   WiFi
+========================= */
+String ssid, pass;
+
+void connectWiFi(){
+
+  notify("wifi_connecting");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+
+  unsigned long t = millis();
+
+  while(WiFi.status() != WL_CONNECTED && millis() - t < 15000){
+    delay(300);
+  }
+
+  if(WiFi.status() == WL_CONNECTED){
+    notify("wifi_ok");
+  } else {
+    notify("wifi_failed");
+  }
+}
+
+/* =========================
+   MQTT连接
+========================= */
 void connectMQTT(){
 
   mqtt.setServer("broker.hivemq.com", 1883);
@@ -148,35 +194,6 @@ void connectMQTT(){
 }
 
 /* =========================
-   WiFi
-========================= */
-String ssid, pass;
-
-void connectWiFi(){
-
-  notify("wifi_connecting");
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-
-  unsigned long t = millis();
-
-  while(WiFi.status() != WL_CONNECTED && millis() - t < 15000){
-    delay(300);
-  }
-
-  if(WiFi.status() == WL_CONNECTED){
-
-    notify("wifi_ok");
-
-    connectMQTT();
-
-  } else {
-    notify("wifi_failed");
-  }
-}
-
-/* =========================
    BLE回调
 ========================= */
 class BLECB : public BLECharacteristicCallbacks {
@@ -188,13 +205,8 @@ class BLECB : public BLECharacteristicCallbacks {
 
     Serial.println("[BLE RX] " + uuid + " = " + val);
 
-    if(uuid == WIFI_SSID_UUID){
-      ssid = val;
-    }
-
-    if(uuid == WIFI_PASS_UUID){
-      pass = val;
-    }
+    if(uuid == WIFI_SSID_UUID) ssid = val;
+    if(uuid == WIFI_PASS_UUID) pass = val;
 
     if(uuid == APPLY_WIFI_UUID && val == "1"){
       connectWiFi();
@@ -211,25 +223,7 @@ class BLECB : public BLECharacteristicCallbacks {
 };
 
 /* =========================
-   BLE自检（关键）
-========================= */
-void bleSelfCheck(){
-
-  Serial.println("========== BLE SELF CHECK ==========");
-
-  if(ssidChar)  Serial.println("OK SSID CHAR");
-  if(passChar)  Serial.println("OK PASS CHAR");
-  if(applyChar) Serial.println("OK APPLY CHAR");
-  if(mqttChar)  Serial.println("OK MQTT CHAR");
-  if(statusChar)Serial.println("OK STATUS CHAR");
-  if(scanChar)  Serial.println("OK SCAN CHAR");
-  if(listChar)  Serial.println("OK LIST CHAR");
-
-  Serial.println("====================================");
-}
-
-/* =========================
-   BLE初始化（关键顺序）
+   BLE初始化（关键）
 ========================= */
 void setupBLE(){
 
@@ -238,10 +232,11 @@ void setupBLE(){
   BLEServer *server = BLEDevice::createServer();
   BLEService *service = server->createService(SERVICE_UUID);
 
-  /* ===== 必须先创建 ===== */
+  /* ===== 创建所有Characteristic ===== */
   ssidChar  = service->createCharacteristic(WIFI_SSID_UUID, BLECharacteristic::PROPERTY_WRITE);
   passChar  = service->createCharacteristic(WIFI_PASS_UUID, BLECharacteristic::PROPERTY_WRITE);
   applyChar = service->createCharacteristic(APPLY_WIFI_UUID, BLECharacteristic::PROPERTY_WRITE);
+
   mqttChar  = service->createCharacteristic(MQTT_CFG_UUID, BLECharacteristic::PROPERTY_WRITE);
 
   statusChar= service->createCharacteristic(STATUS_UUID, BLECharacteristic::PROPERTY_NOTIFY);
@@ -249,18 +244,18 @@ void setupBLE(){
   scanChar  = service->createCharacteristic(SCAN_UUID, BLECharacteristic::PROPERTY_WRITE);
   listChar  = service->createCharacteristic(LIST_UUID, BLECharacteristic::PROPERTY_NOTIFY);
 
-  /* ===== callback绑定 ===== */
+  /* ===== callback ===== */
   ssidChar->setCallbacks(new BLECB());
   passChar->setCallbacks(new BLECB());
   applyChar->setCallbacks(new BLECB());
   mqttChar->setCallbacks(new BLECB());
   scanChar->setCallbacks(new BLECB());
 
-  /* ===== notify descriptor ===== */
+  /* ===== notify ===== */
   statusChar->addDescriptor(new BLE2902());
   listChar->addDescriptor(new BLE2902());
 
-  /* ===== 启动服务 ===== */
+  /* ===== 启动 ===== */
   service->start();
 
   BLEAdvertising *adv = BLEDevice::getAdvertising();
@@ -268,6 +263,9 @@ void setupBLE(){
   adv->start();
 
   Serial.println("BLE READY");
+
+  /* ===== ⭐关键：启动后检查 ===== */
+  printBLECheck();
 }
 
 /* =========================
@@ -278,8 +276,6 @@ void setup(){
   Serial.begin(115200);
 
   setupBLE();
-
-  bleSelfCheck();   // ⭐关键：启动自检
 }
 
 /* =========================
