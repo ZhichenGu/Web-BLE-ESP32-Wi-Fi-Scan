@@ -1,0 +1,127 @@
+# .github/workflows/build.yml
+#
+# 触发条件: 推送 tag（格式 v1.2.3）时自动运行
+#
+# 功能:
+#   1. 用 arduino-cli 编译 esp32_main.ino
+#   2. 创建 GitHub Release，上传 firmware.bin
+#   3. 自动更新 version.json 并推送回 main 分支
+#
+# 使用方法:
+#   git tag v1.1.0
+#   git push origin v1.1.0
+#   → Actions 自动运行，完成后 ESP32 下次检查即可收到更新
+
+name: Build & Release Firmware
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'          # 只有推送版本 tag 才触发
+
+permissions:
+  contents: write         # 需要创建 Release 和推送文件
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. 拉取代码 ────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. 解析版本号（去掉 tag 前缀 "v"）───────────────────
+      - name: Parse version
+        id: ver
+        run: |
+          RAW="${GITHUB_REF_NAME}"        # e.g. v1.2.3
+          VER="${RAW#v}"                  # e.g. 1.2.3
+          echo "tag=${RAW}" >> $GITHUB_OUTPUT
+          echo "ver=${VER}" >> $GITHUB_OUTPUT
+
+      # ── 3. 安装 arduino-cli ─────────────────────────────────
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      # ── 4. 添加 ESP32 board package ─────────────────────────
+      - name: Add ESP32 board
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      # ── 5. 安装依赖库 ────────────────────────────────────────
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "ArduinoJson"
+
+      # ── 6. 自动注入版本号到 ota.h ───────────────────────────
+      - name: Inject version into ota.h
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          sed -i "s/#define FIRMWARE_VERSION \".*\"/#define FIRMWARE_VERSION \"${VER}\"/" ota.h
+          echo "ota.h 版本已更新为 ${VER}"
+          grep FIRMWARE_VERSION ota.h
+
+      # ── 7. 编译固件 ─────────────────────────────────────────
+      - name: Compile firmware
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --output-dir ./build \
+            esp32_main.ino
+          # 重命名为 firmware.bin，方便固定 URL 引用
+          cp ./build/esp32_main.ino.bin ./build/firmware.bin
+          ls -lh ./build/
+
+      # ── 8. 更新 version.json ────────────────────────────────
+      - name: Update version.json
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          REPO="${GITHUB_REPOSITORY}"   # owner/repo
+          OWNER="${REPO%%/*}"
+          REPONAME="${REPO##*/}"
+
+          cat > version.json <<EOF
+          {
+            "version": "${VER}",
+            "url": "https://github.com/${REPO}/releases/download/v${VER}/firmware.bin",
+            "notes": "Released by GitHub Actions"
+          }
+          EOF
+
+          echo "version.json 已更新:"
+          cat version.json
+
+      # ── 9. 提交更新后的 version.json 回 main ────────────────
+      - name: Commit version.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.json ota.h
+          git commit -m "ci: bump version to ${{ steps.ver.outputs.ver }} [skip ci]" || echo "无变化，跳过"
+          git push origin HEAD:main
+
+      # ── 10. 创建 GitHub Release 并上传 .bin ─────────────────
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "Firmware ${{ steps.ver.outputs.ver }}"
+          body: |
+            ## ESP32 固件 v${{ steps.ver.outputs.ver }}
+            
+            自动构建，通过 GitHub Actions 编译。
+            
+            **OTA 更新**: ESP32 会在下次检查时（最多 6 小时后）自动下载此版本。
+            也可在配网页面点击「立即检查更新」手动触发。
+          files: ./build/firmware.bin
+          draft: false
+          prerelease: false
