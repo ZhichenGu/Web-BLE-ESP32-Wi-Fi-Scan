@@ -182,7 +182,6 @@ document.getElementById("sendMqttBtn").onclick = async () => {
   const pass = document.getElementById("mqttPassInput").value;
 
   if (!host) { logBLE("❌ 请填写 Broker 地址"); return; }
-
   // 格式与ESP32 parseMQTTConfig 对应：host|port|user|pass
   const payload = `${host}|${port}|${user}|${pass}`;
 
