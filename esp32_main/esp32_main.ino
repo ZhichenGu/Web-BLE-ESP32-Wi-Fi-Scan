@@ -26,7 +26,7 @@
 // ════════════════════════════════════════════════════════════
 //  !! 修改这里 !!
 // ════════════════════════════════════════════════════════════
-#define GITHUB_PAGES_URL  "https://你的用户名.github.io/你的仓库名"
+#define GITHUB_PAGES_URL  "https://ZhichenGu.github.io/Web-BLE-ESP32-Wi-Fi-Scan"
 //
 // OTA 检查间隔（毫秒），默认每 6 小时检查一次
 #define OTA_CHECK_INTERVAL_MS  (6UL * 60 * 60 * 1000)
