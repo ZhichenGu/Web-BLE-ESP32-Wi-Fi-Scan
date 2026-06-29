@@ -1,35 +1,64 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
 <meta charset="UTF-8">
-<title>ESP32 WiFi 配网</title>
+<title>ESP32 IoT 控制台</title>
+
 <link rel="stylesheet" href="style.css">
+
+<!-- MQTT.js -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 
 <body>
 
-<h2>ESP32 BLE WiFi 配网</h2>
+<h2>ESP32 IoT 控制台</h2>
+
+<div class="container">
+
+<!-- ========== BLE 左侧 ========== -->
+<div class="panel">
+<h3>🔵 BLE 配网</h3>
 
 <button id="connectBtn">连接 ESP32</button>
 <button id="scanBtn">扫描 WiFi</button>
 
-<hr>
-
-<label>选择 WiFi：</label>
 <select id="ssidList"></select>
-
-<br><br>
 
 <input id="password" type="password" placeholder="WiFi 密码">
 
-<br><br>
-
 <button id="applyBtn">连接网络</button>
+
+<pre id="bleLog"></pre>
+</div>
+
+<!-- ========== MQTT + OTA 右侧 ========== -->
+<div class="panel">
+
+<h3>🟣 MQTT 连接</h3>
+
+<input id="mqttUrl" placeholder="wss://broker:8884/mqtt">
+<input id="mqttUser" placeholder="用户名">
+<input id="mqttPass" type="password" placeholder="密码">
+
+<button id="mqttConnectBtn">连接 MQTT</button>
 
 <hr>
 
-<pre id="log"></pre>
+<h3>🚀 OTA 更新</h3>
+
+<input id="firmwareUrl" placeholder="firmware.bin URL">
+
+<button id="otaBtn">推送更新</button>
+
+<pre id="otaLog"></pre>
+
+</div>
+
+</div>
 
 <script src="app.js"></script>
+
 </body>
 </html>
