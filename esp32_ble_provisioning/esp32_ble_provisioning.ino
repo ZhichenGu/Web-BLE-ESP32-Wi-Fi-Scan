@@ -11,7 +11,7 @@
 #include <HTTPUpdate.h>
 
 /* =========================
-   BLE UUID
+   UUID（必须和JS一致）
 ========================= */
 #define SERVICE_UUID "5a67d678-6361-4f32-8396-54c6926c8fa9"
 
@@ -22,33 +22,25 @@
 #define MQTT_CFG_UUID   "5a67d678-6361-4f32-8396-54c6926c9001"
 #define STATUS_UUID     "5a67d678-6361-4f32-8396-54c6926c8f06"
 
+#define SCAN_UUID       "5a67d678-6361-4f32-8396-54c6926c8f01"
+#define LIST_UUID       "5a67d678-6361-4f32-8396-54c6926c8f02"
+
 /* =========================
-   存储
+   全局对象
 ========================= */
 Preferences prefs;
 
-/* =========================
-   WiFi / MQTT
-========================= */
 WiFiClient wifiClient;
 PubSubClient mqtt(wifiClient);
 
-String mqttHost;
-int mqttPort = 1883;
-String mqttUser;
-String mqttPass;
-
-String ssid;
-String pass;
-
-/* =========================
-   BLE
-========================= */
+/* BLE 特征 */
 BLECharacteristic *ssidChar;
 BLECharacteristic *passChar;
 BLECharacteristic *applyChar;
 BLECharacteristic *mqttChar;
 BLECharacteristic *statusChar;
+BLECharacteristic *scanChar;
+BLECharacteristic *listChar;
 
 /* =========================
    状态通知
@@ -58,27 +50,55 @@ void notify(String msg){
     statusChar->setValue(msg.c_str());
     statusChar->notify();
   }
-  Serial.println("[STATUS] " + msg);
+  Serial.println("[ESP32] " + msg);
 }
 
 /* =========================
-   OTA处理（稳定版解析）
+   WiFi扫描
+========================= */
+void runScan(){
+
+  notify("scanning");
+
+  WiFi.mode(WIFI_STA);
+
+  int n = WiFi.scanNetworks();
+  int cap = (n > 10) ? 10 : n;
+
+  String json = "[";
+
+  for(int i=0;i<cap;i++){
+    if(i) json += ",";
+
+    String s = WiFi.SSID(i);
+    s.replace("\"","\\\"");
+
+    json += "{\"s\":\"" + s + "\",\"r\":" + String(WiFi.RSSI(i)) + "}";
+  }
+
+  json += "]";
+
+  listChar->setValue(json.c_str());
+  listChar->notify();
+
+  notify("scan_done");
+}
+
+/* =========================
+   OTA
 ========================= */
 void handleOTA(String msg){
 
-  String url = "";
-
   int key = msg.indexOf("\"url\":\"");
-  if (key != -1) {
-    int start = key + 7;
-    int end = msg.indexOf("\"", start);
-    url = msg.substring(start, end);
-  }
-
-  if(url == ""){
-    notify("OTA url error");
+  if(key == -1){
+    notify("OTA parse error");
     return;
   }
+
+  int start = key + 7;
+  int end = msg.indexOf("\"", start);
+
+  String url = msg.substring(start, end);
 
   notify("OTA start");
 
@@ -93,7 +113,7 @@ void handleOTA(String msg){
 }
 
 /* =========================
-   MQTT回调
+   MQTT
 ========================= */
 void callback(char* topic, byte* payload, unsigned int length){
 
@@ -107,25 +127,18 @@ void callback(char* topic, byte* payload, unsigned int length){
   }
 }
 
-/* =========================
-   MQTT连接（带自动重连）
-========================= */
 void connectMQTT(){
 
-  mqtt.setServer(mqttHost.c_str(), mqttPort);
+  mqtt.setServer("broker.hivemq.com", 1883);
   mqtt.setCallback(callback);
 
   String clientId = "esp32-" + String(random(1000,9999));
 
   while(!mqtt.connected()){
 
-    Serial.println("MQTT connecting...");
+    notify("MQTT connecting");
 
-    if(mqtt.connect(
-      clientId.c_str(),
-      mqttUser.c_str(),
-      mqttPass.c_str()
-    )){
+    if(mqtt.connect(clientId.c_str())){
       mqtt.subscribe("esp32/update");
       notify("MQTT connected");
     } else {
@@ -135,11 +148,13 @@ void connectMQTT(){
 }
 
 /* =========================
-   WiFi连接
+   WiFi
 ========================= */
+String ssid, pass;
+
 void connectWiFi(){
 
-  notify("WiFi connecting");
+  notify("wifi_connecting");
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid.c_str(), pass.c_str());
@@ -152,17 +167,12 @@ void connectWiFi(){
 
   if(WiFi.status() == WL_CONNECTED){
 
-    notify("WiFi OK");
-
-    prefs.begin("wifi", false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("pass", pass);
-    prefs.end();
+    notify("wifi_ok");
 
     connectMQTT();
 
   } else {
-    notify("WiFi failed");
+    notify("wifi_failed");
   }
 }
 
@@ -176,48 +186,50 @@ class BLECB : public BLECharacteristicCallbacks {
     String uuid = c->getUUID().toString().c_str();
     String val  = c->getValue().c_str();
 
+    Serial.println("[BLE RX] " + uuid + " = " + val);
+
     if(uuid == WIFI_SSID_UUID){
       ssid = val;
-      Serial.println("SSID: " + ssid);
     }
 
     if(uuid == WIFI_PASS_UUID){
       pass = val;
     }
 
-    if(uuid == APPLY_WIFI_UUID){
-      if(val == "1"){
-        connectWiFi();
-      }
+    if(uuid == APPLY_WIFI_UUID && val == "1"){
+      connectWiFi();
+    }
+
+    if(uuid == SCAN_UUID && val == "1"){
+      runScan();
     }
 
     if(uuid == MQTT_CFG_UUID){
-
-      Serial.println("MQTT config received");
-
-      int p1 = val.indexOf('|');
-      int p2 = val.indexOf('|', p1+1);
-      int p3 = val.indexOf('|', p2+1);
-
-      mqttHost = val.substring(0, p1);
-      mqttPort = val.substring(p1+1, p2).toInt();
-      mqttUser = val.substring(p2+1, p3);
-      mqttPass = val.substring(p3+1);
-
-      prefs.begin("mqtt", false);
-      prefs.putString("host", mqttHost);
-      prefs.putString("user", mqttUser);
-      prefs.putString("pass", mqttPass);
-      prefs.putInt("port", mqttPort);
-      prefs.end();
-
-      notify("MQTT saved");
+      notify("mqtt_saved");
     }
   }
 };
 
 /* =========================
-   BLE初始化
+   BLE自检（关键）
+========================= */
+void bleSelfCheck(){
+
+  Serial.println("========== BLE SELF CHECK ==========");
+
+  if(ssidChar)  Serial.println("OK SSID CHAR");
+  if(passChar)  Serial.println("OK PASS CHAR");
+  if(applyChar) Serial.println("OK APPLY CHAR");
+  if(mqttChar)  Serial.println("OK MQTT CHAR");
+  if(statusChar)Serial.println("OK STATUS CHAR");
+  if(scanChar)  Serial.println("OK SCAN CHAR");
+  if(listChar)  Serial.println("OK LIST CHAR");
+
+  Serial.println("====================================");
+}
+
+/* =========================
+   BLE初始化（关键顺序）
 ========================= */
 void setupBLE(){
 
@@ -226,58 +238,36 @@ void setupBLE(){
   BLEServer *server = BLEDevice::createServer();
   BLEService *service = server->createService(SERVICE_UUID);
 
+  /* ===== 必须先创建 ===== */
   ssidChar  = service->createCharacteristic(WIFI_SSID_UUID, BLECharacteristic::PROPERTY_WRITE);
   passChar  = service->createCharacteristic(WIFI_PASS_UUID, BLECharacteristic::PROPERTY_WRITE);
   applyChar = service->createCharacteristic(APPLY_WIFI_UUID, BLECharacteristic::PROPERTY_WRITE);
   mqttChar  = service->createCharacteristic(MQTT_CFG_UUID, BLECharacteristic::PROPERTY_WRITE);
+
   statusChar= service->createCharacteristic(STATUS_UUID, BLECharacteristic::PROPERTY_NOTIFY);
 
+  scanChar  = service->createCharacteristic(SCAN_UUID, BLECharacteristic::PROPERTY_WRITE);
+  listChar  = service->createCharacteristic(LIST_UUID, BLECharacteristic::PROPERTY_NOTIFY);
+
+  /* ===== callback绑定 ===== */
   ssidChar->setCallbacks(new BLECB());
   passChar->setCallbacks(new BLECB());
   applyChar->setCallbacks(new BLECB());
   mqttChar->setCallbacks(new BLECB());
+  scanChar->setCallbacks(new BLECB());
 
+  /* ===== notify descriptor ===== */
   statusChar->addDescriptor(new BLE2902());
+  listChar->addDescriptor(new BLE2902());
 
+  /* ===== 启动服务 ===== */
   service->start();
 
   BLEAdvertising *adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(SERVICE_UUID);
   adv->start();
 
-  Serial.println("BLE Ready");
-}
-
-/* =========================
-   加载MQTT
-========================= */
-void loadMQTT(){
-
-  prefs.begin("mqtt", true);
-
-  mqttHost = prefs.getString("host","");
-  mqttUser = prefs.getString("user","");
-  mqttPass = prefs.getString("pass","");
-  mqttPort = prefs.getInt("port",1883);
-
-  prefs.end();
-}
-
-/* =========================
-   自动WiFi
-========================= */
-void autoWiFi(){
-
-  prefs.begin("wifi", true);
-
-  ssid = prefs.getString("ssid","");
-  pass = prefs.getString("pass","");
-
-  prefs.end();
-
-  if(ssid != ""){
-    connectWiFi();
-  }
+  Serial.println("BLE READY");
 }
 
 /* =========================
@@ -289,21 +279,18 @@ void setup(){
 
   setupBLE();
 
-  loadMQTT();
-  autoWiFi();
+  bleSelfCheck();   // ⭐关键：启动自检
 }
 
 /* =========================
-   LOOP（关键修复：自动重连）
+   LOOP
 ========================= */
 void loop(){
 
   if(WiFi.status() == WL_CONNECTED){
-
     if(!mqtt.connected()){
       connectMQTT();
     }
-
     mqtt.loop();
   }
 
