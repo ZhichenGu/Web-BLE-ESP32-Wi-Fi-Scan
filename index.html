@@ -3,24 +3,23 @@
 
 <head>
 <meta charset="UTF-8">
-<title>ESP32 IoT 控制台</title>
+<title>ESP32 IoT Debug Console</title>
 
 <link rel="stylesheet" href="style.css">
 
-<!-- MQTT over WebSocket -->
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 
 <body>
 
-<h2>ESP32 IoT 控制台</h2>
+<h2>ESP32 IoT 控制台（Debug版）</h2>
 
 <div class="container">
 
-<!-- ========== 左侧 BLE ========== -->
+<!-- ========== BLE ========== -->
 <div class="panel">
 
-<h3>🔵 BLE 配网</h3>
+<h3>🔵 BLE 配网（带握手）</h3>
 
 <button id="connectBtn">连接ESP32</button>
 <button id="scanBtn">扫描WiFi</button>
@@ -33,32 +32,33 @@
 
 <hr>
 
+<h3>🟢 ESP32反馈</h3>
+<pre id="bleLog"></pre>
+
+<hr>
+
 <h3>🟣 MQTT配置（BLE下发）</h3>
 
-<input id="mqttUrl" placeholder="HiveMQ URL (wss://xxx:8884/mqtt)">
+<input id="mqttUrl" placeholder="wss://xxx:8884/mqtt">
 <input id="mqttUser" placeholder="MQTT用户名">
 <input id="mqttPass" type="password" placeholder="MQTT密码">
 
 <button id="sendMqttBtn">下发MQTT配置</button>
 
-<pre id="bleLog"></pre>
-
 </div>
 
-<!-- ========== 右侧 MQTT + OTA ========== -->
+<!-- ========== MQTT / OTA ========== -->
 <div class="panel">
 
-<h3>🚀 MQTT连接（WebSocket）</h3>
-
+<h3>📡 MQTT连接</h3>
 <button id="mqttConnectBtn">连接MQTT</button>
 
 <hr>
 
-<h3>📦 OTA更新</h3>
+<h3>🚀 OTA升级</h3>
 
 <input id="firmwareUrl" placeholder="firmware.bin URL">
-
-<button id="otaBtn">推送OTA更新</button>
+<button id="otaBtn">推送OTA</button>
 
 <pre id="otaLog"></pre>
 

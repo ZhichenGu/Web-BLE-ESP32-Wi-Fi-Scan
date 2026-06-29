@@ -1,16 +1,16 @@
+
 /* =========================
-   BLE UUID（必须匹配ESP32）
+   BLE UUID
 ========================= */
 const SERVICE = "5a67d678-6361-4f32-8396-54c6926c8fa9";
 
-const SCAN    = "5a67d678-6361-4f32-8396-54c6926c8f01";
-const LIST    = "5a67d678-6361-4f32-8396-54c6926c8f02";
-const SSID    = "5a67d678-6361-4f32-8396-54c6926c8f03";
-const PASS    = "5a67d678-6361-4f32-8396-54c6926c8f04";
-const APPLY   = "5a67d678-6361-4f32-8396-54c6926c8f05";
-const STATUS  = "5a67d678-6361-4f32-8396-54c6926c8f06";
-
-const MQTT_CFG = "5a67d678-6361-4f32-8396-54c6926c9001";
+const SCAN   = "5a67d678-6361-4f32-8396-54c6926c8f01";
+const LIST   = "5a67d678-6361-4f32-8396-54c6926c8f02";
+const SSID   = "5a67d678-6361-4f32-8396-54c6926c8f03";
+const PASS   = "5a67d678-6361-4f32-8396-54c6926c8f04";
+const APPLY  = "5a67d678-6361-4f32-8396-54c6926c8f05";
+const STATUS = "5a67d678-6361-4f32-8396-54c6926c8f06";
+const MQTT   = "5a67d678-6361-4f32-8396-54c6926c9001";
 
 /* =========================
    BLE变量
@@ -18,12 +18,12 @@ const MQTT_CFG = "5a67d678-6361-4f32-8396-54c6926c9001";
 let scanChar, listChar, ssidChar, passChar, applyChar, statusChar, mqttChar;
 
 /* =========================
-   MQTT变量
+   MQTT
 ========================= */
 let mqttClient;
 
 /* =========================
-   log
+   LOG
 ========================= */
 function logBLE(msg){
   document.getElementById("bleLog").textContent += msg + "\n";
@@ -34,57 +34,79 @@ function logOTA(msg){
 }
 
 /* =========================
-   BLE连接
+   连接BLE
 ========================= */
 document.getElementById("connectBtn").onclick = async () => {
 
-  const device = await navigator.bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: [SERVICE]
-  });
+  try {
+    logBLE("🔍 searching ESP32...");
 
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(SERVICE);
-
-  scanChar   = await service.getCharacteristic(SCAN);
-  listChar   = await service.getCharacteristic(LIST);
-  ssidChar   = await service.getCharacteristic(SSID);
-  passChar   = await service.getCharacteristic(PASS);
-  applyChar  = await service.getCharacteristic(APPLY);
-  statusChar = await service.getCharacteristic(STATUS);
-  mqttChar   = await service.getCharacteristic(MQTT_CFG);
-
-  await statusChar.startNotifications();
-  statusChar.addEventListener("characteristicvaluechanged", e=>{
-    logBLE("[ESP32] " + new TextDecoder().decode(e.target.value));
-  });
-
-  await listChar.startNotifications();
-  listChar.addEventListener("characteristicvaluechanged", e=>{
-    const arr = JSON.parse(new TextDecoder().decode(e.target.value));
-
-    const sel = document.getElementById("ssidList");
-    sel.innerHTML = "";
-
-    arr.forEach(ap=>{
-      const opt = document.createElement("option");
-      opt.value = ap.s;
-      opt.textContent = `${ap.s} (${ap.r})`;
-      sel.appendChild(opt);
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE]
     });
 
-    logBLE("WiFi列表更新");
-  });
+    logBLE("✅ selected: " + device.name);
 
-  logBLE("BLE连接成功");
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE);
+
+    scanChar  = await service.getCharacteristic(SCAN);
+    listChar  = await service.getCharacteristic(LIST);
+    ssidChar  = await service.getCharacteristic(SSID);
+    passChar  = await service.getCharacteristic(PASS);
+    applyChar = await service.getCharacteristic(APPLY);
+    statusChar= await service.getCharacteristic(STATUS);
+    mqttChar  = await service.getCharacteristic(MQTT);
+
+    /* ===== ESP32状态 ===== */
+    await statusChar.startNotifications();
+    statusChar.addEventListener("characteristicvaluechanged", e=>{
+      const msg = new TextDecoder().decode(e.target.value);
+      logBLE("📡 ESP32: " + msg);
+    });
+
+    /* ===== WiFi列表 ===== */
+    await listChar.startNotifications();
+    listChar.addEventListener("characteristicvaluechanged", e=>{
+      const arr = JSON.parse(new TextDecoder().decode(e.target.value));
+
+      const sel = document.getElementById("ssidList");
+      sel.innerHTML = "";
+
+      arr.forEach(ap=>{
+        const opt = document.createElement("option");
+        opt.value = ap.s;
+        opt.textContent = `${ap.s} (${ap.r})`;
+        sel.appendChild(opt);
+      });
+
+      logBLE("📶 WiFi列表更新");
+    });
+
+    logBLE("✅ BLE READY");
+
+  } catch(err){
+    logBLE("❌ BLE ERROR: " + err);
+  }
 };
 
 /* =========================
-   WiFi扫描
+   扫描WiFi（加确认）
 ========================= */
 document.getElementById("scanBtn").onclick = async () => {
-  await scanChar.writeValue(new TextEncoder().encode("1"));
-  logBLE("扫描WiFi...");
+
+  if(!scanChar){
+    logBLE("❌ 未连接ESP32");
+    return;
+  }
+
+  try {
+    await scanChar.writeValue(new TextEncoder().encode("1"));
+    logBLE("➡️ scan command sent");
+  } catch(err){
+    logBLE("❌ scan failed: " + err);
+  }
 };
 
 /* =========================
@@ -99,30 +121,30 @@ document.getElementById("applyBtn").onclick = async () => {
   await passChar.writeValue(new TextEncoder().encode(pass));
   await applyChar.writeValue(new TextEncoder().encode("1"));
 
-  logBLE("连接WiFi...");
+  logBLE("➡️ WiFi connect sent");
 };
 
 /* =========================
-   MQTT配置 BLE下发
+   MQTT配置 BLE下发（关键）
 ========================= */
 document.getElementById("sendMqttBtn").onclick = async () => {
 
   const url  = document.getElementById("mqttUrl").value;
   const user = document.getElementById("mqttUser").value;
   const pass = document.getElementById("mqttPass").value;
-  const port = 8883;
 
-  const data = `${url}|${port}|${user}|${pass}`;
+  const payload = `${url}|8883|${user}|${pass}`;
 
-  await mqttChar.writeValue(
-    new TextEncoder().encode(data)
-  );
-
-  logBLE("MQTT配置已发送到ESP32");
+  try {
+    await mqttChar.writeValue(new TextEncoder().encode(payload));
+    logBLE("✅ MQTT config sent");
+  } catch(err){
+    logBLE("❌ MQTT send failed: " + err);
+  }
 };
 
 /* =========================
-   MQTT连接（WebSocket）
+   MQTT连接
 ========================= */
 document.getElementById("mqttConnectBtn").onclick = () => {
 
@@ -136,28 +158,24 @@ document.getElementById("mqttConnectBtn").onclick = () => {
   });
 
   mqttClient.on("connect", () => {
-    logOTA("MQTT连接成功");
+    logOTA("MQTT connected");
   });
 
-  mqttClient.on("error", err => {
-    logOTA("MQTT错误: " + err.message);
+  mqttClient.on("error", e=>{
+    logOTA("MQTT error: " + e.message);
   });
 };
 
 /* =========================
-   OTA推送
+   OTA
 ========================= */
 document.getElementById("otaBtn").onclick = () => {
 
   const url = document.getElementById("firmwareUrl").value;
 
-  mqttClient.publish(
-    "esp32/update",
-    JSON.stringify({
-      url: url,
-      version: "1.0.0"
-    })
-  );
+  mqttClient.publish("esp32/update", JSON.stringify({
+    url: url
+  }));
 
-  logOTA("OTA已推送");
+  logOTA("OTA sent");
 };
