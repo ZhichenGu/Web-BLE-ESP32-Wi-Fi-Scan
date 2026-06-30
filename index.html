@@ -9,6 +9,7 @@
 <body>
 
 <h2>ESP32 IoT 控制台</h2>
+
 <div class="container">
 
   <!-- ========== BLE ========== -->
@@ -30,7 +31,7 @@
 
     <h3>🟣 MQTT 配置（BLE 下发）</h3>
     <input id="mqttHost" placeholder="Broker 地址（如 broker.hivemq.com）">
-    <input id="mqttPort" type="number" placeholder="端口（默认 1883）" value="1883">
+    <input id="mqttPort" type="number" placeholder="端口（HiveMQ Cloud 用 8883）" value="8883">
     <input id="mqttUser" placeholder="MQTT 用户名（可空）">
     <input id="mqttPassInput" type="password" placeholder="MQTT 密码（可空）">
     <button id="sendMqttBtn" disabled>下发 MQTT 配置</button>

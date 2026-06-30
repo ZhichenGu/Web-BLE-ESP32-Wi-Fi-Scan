@@ -43,7 +43,8 @@ Preferences prefs;
 
 WiFiClient    wifiClient;
 WiFiClientSecure wifiClientSecure;
-PubSubClient  mqtt(wifiClient);
+WiFiClientSecure mqttSecureClient;
+PubSubClient  mqtt(mqttSecureClient);
 
 /* BLE 特征 */
 BLECharacteristic *ssidChar;
@@ -206,6 +207,7 @@ void connectMQTT() {
   if (mqttUrl.isEmpty()) return;
 
   // 从保存的配置设置server
+  mqttSecureClient.setInsecure(); // 生产环境请改为校验HiveMQ的CA证书
   mqtt.setServer(mqttUrl.c_str(), mqttPort);
   mqtt.setCallback(mqttCallback);
 
@@ -245,11 +247,11 @@ void parseMQTTConfig(String raw) {
   }
 
   mqttUrl  = raw.substring(0, p1);
-  mqttPort = (p2 != -1) ? raw.substring(p1 + 1, p2).toInt() : 1883;
+  mqttPort = (p2 != -1) ? raw.substring(p1 + 1, p2).toInt() : 8883;
   mqttUser = (p2 != -1 && p3 != -1) ? raw.substring(p2 + 1, p3) : "";
   mqttPass = (p3 != -1) ? raw.substring(p3 + 1) : "";
 
-  if (mqttPort == 0) mqttPort = 1883;
+  if (mqttPort == 0) mqttPort = 8883;
 
   // 保存到NVS
   prefs.begin("mqtt", false);
@@ -350,7 +352,7 @@ void loadSavedConfig() {
 
   prefs.begin("mqtt", true);
   mqttUrl  = prefs.getString("url",  "");
-  mqttPort = prefs.getInt   ("port", 1883);
+  mqttPort = prefs.getInt   ("port", 8883);
   mqttUser = prefs.getString("user", "");
   mqttPass = prefs.getString("pass", "");
   prefs.end();
