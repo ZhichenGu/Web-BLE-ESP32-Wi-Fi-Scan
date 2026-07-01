@@ -82,10 +82,10 @@ String mqttPass = "";
 #define DEBUG_HARDCODE_MQTT true
 
 #if DEBUG_HARDCODE_MQTT
-  #define DEBUG_MQTT_URL  "a4309d1f456042fbb2ce25305dcefbf5.s1.eu.hivemq.cloud"
+  #define DEBUG_MQTT_URL  "5e0cab30999c476b8022e63cb7d1fa3b.s1.eu.hivemq.cloud"
   #define DEBUG_MQTT_PORT 8883
-  #define DEBUG_MQTT_USER "Shit6767"
-  #define DEBUG_MQTT_PASS "Shit6767"
+  #define DEBUG_MQTT_USER "zhichen"
+  #define DEBUG_MQTT_PASS "Asd12345"
 #endif
 
 /* =========================
