@@ -20,6 +20,7 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 
 /* =========================
    UUID（必须和JS一致）
@@ -69,13 +70,28 @@ String wifiPASS = "";
 
 /* MQTT凭据 */
 String mqttUrl  = "";
-int    mqttPort = 1883;
+int    mqttPort = 8883;
 String mqttUser = "";
 String mqttPass = "";
 
 /* =========================
+   调试用：临时硬编码MQTT凭据
+   排查完连接问题后，把下面这行改成 false 即可恢复正常的 BLE 下发模式
+   ⚠️ 请把下方占位符换成你自己的真实值，且不要把真实凭据提交到公开仓库
+========================= */
+#define DEBUG_HARDCODE_MQTT true
+
+#if DEBUG_HARDCODE_MQTT
+  #define DEBUG_MQTT_URL  "a4309d1f456042fbb2ce25305dcefbf5.s1.eu.hivemq.cloud"
+  #define DEBUG_MQTT_PORT 8883
+  #define DEBUG_MQTT_USER "Shit6767"
+  #define DEBUG_MQTT_PASS "Shit6767"
+#endif
+
+/* =========================
    状态通知
 ========================= */
+String mqttErrToStr(int code); // 前向声明
 void notify(String msg) {
   if (statusChar) {
     statusChar->setValue(msg.c_str());
@@ -175,6 +191,30 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 /* =========================
+   时间同步（TLS握手必需）
+========================= */
+void syncTime() {
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+  Serial.print("[NTP] syncing time");
+  time_t now = time(nullptr);
+  int retry = 0;
+  while (now < 8 * 3600 * 2 && retry < 20) { // 等待获取到合理的时间戳
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+    retry++;
+  }
+  Serial.println();
+
+  if (now > 8 * 3600 * 2) {
+    Serial.println("[NTP] time synced: " + String(now));
+  } else {
+    Serial.println("[NTP] time sync FAILED");
+  }
+}
+
+/* =========================
    WiFi连接（在loop里调用）
 ========================= */
 void connectWiFi() {
@@ -194,6 +234,9 @@ void connectWiFi() {
     prefs.putString("ssid", wifiSSID);
     prefs.putString("pass", wifiPASS);
     prefs.end();
+
+    // TLS握手需要正确的系统时间，WiFi连上后立即同步
+    syncTime();
   } else {
     notify("wifi_failed");
   }
@@ -208,12 +251,33 @@ void connectMQTT() {
 
   // 从保存的配置设置server
   mqttSecureClient.setInsecure(); // 生产环境请改为校验HiveMQ的CA证书
+  mqttSecureClient.setTimeout(15000); // TLS握手给足时间
+  mqtt.setBufferSize(1024);  // 默认256字节太小，TLS数据包会被截断导致rc=-2
+  mqtt.setKeepAlive(60);
   mqtt.setServer(mqttUrl.c_str(), mqttPort);
   mqtt.setCallback(mqttCallback);
 
   String clientId = "esp32-" + String(random(1000, 9999));
 
   Serial.println("[MQTT] connecting to " + mqttUrl + ":" + String(mqttPort));
+  Serial.println("[MQTT] free heap before connect: " + String(ESP.getFreeHeap()));
+
+  // 先测试DNS解析是否成功，排除是DNS问题还是TCP连接问题
+  IPAddress resolvedIP;
+  if (WiFi.hostByName(mqttUrl.c_str(), resolvedIP)) {
+    Serial.println("[MQTT] DNS resolved: " + resolvedIP.toString());
+  } else {
+    Serial.println("[MQTT] DNS resolve FAILED for " + mqttUrl);
+  }
+
+  // 再测试纯TCP能否连通该端口，排除是否被网络封锁
+  WiFiClient testTcp;
+  if (testTcp.connect(mqttUrl.c_str(), mqttPort)) {
+    Serial.println("[MQTT] raw TCP connect OK (port reachable)");
+    testTcp.stop();
+  } else {
+    Serial.println("[MQTT] raw TCP connect FAILED (port likely blocked by network)");
+  }
 
   bool ok;
   if (mqttUser.length() > 0) {
@@ -226,8 +290,27 @@ void connectMQTT() {
     mqtt.subscribe("esp32/update");
     notify("MQTT connected");
   } else {
-    Serial.println("[MQTT] connect failed, rc=" + String(mqtt.state()));
+    int state = mqtt.state();
+    Serial.println("[MQTT] connect failed, rc=" + String(state) + " (" + mqttErrToStr(state) + ")");
     // 不在这里delay或while，loop()会再次尝试
+  }
+}
+
+/* =========================
+   MQTT错误码转文字（便于排查）
+========================= */
+String mqttErrToStr(int code) {
+  switch (code) {
+    case -4: return "MQTT_CONNECTION_TIMEOUT - 服务器响应超时";
+    case -3: return "MQTT_CONNECTION_LOST - 连接中途断开";
+    case -2: return "MQTT_CONNECT_FAILED - TCP/TLS连接失败（端口/证书/缓冲区问题）";
+    case -1: return "MQTT_DISCONNECTED - 客户端已断开";
+    case 1:  return "MQTT_CONNECT_BAD_PROTOCOL - 协议版本不支持";
+    case 2:  return "MQTT_CONNECT_BAD_CLIENT_ID - 客户端ID被拒绝";
+    case 3:  return "MQTT_CONNECT_UNAVAILABLE - 服务器不可用";
+    case 4:  return "MQTT_CONNECT_BAD_CREDENTIALS - 用户名或密码错误";
+    case 5:  return "MQTT_CONNECT_UNAUTHORIZED - 未授权（权限/ACL问题）";
+    default: return "未知错误";
   }
 }
 
@@ -369,6 +452,15 @@ void setup() {
   delay(500);
 
   loadSavedConfig();
+
+#if DEBUG_HARDCODE_MQTT
+  mqttUrl  = DEBUG_MQTT_URL;
+  mqttPort = DEBUG_MQTT_PORT;
+  mqttUser = DEBUG_MQTT_USER;
+  mqttPass = DEBUG_MQTT_PASS;
+  Serial.println("[DEBUG] using hardcoded MQTT config: " + mqttUrl + ":" + String(mqttPort));
+#endif
+
   setupBLE();
 
   // 如果有保存的WiFi，自动连接
