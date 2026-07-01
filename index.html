@@ -2,20 +2,17 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>ESP32 IoT Debug Console</title>
+  <title>ESP32 配网控制台</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
-<h2>ESP32 IoT 控制台</h2>
+<h2>ESP32 配网控制台</h2>
 
 <div class="container">
 
-  <!-- ========== BLE ========== -->
   <div class="panel">
-    <h3>🔵 BLE 配网</h3>
-
+    <h3>🔵 BLE 连接</h3>
     <button id="connectBtn">连接 ESP32</button>
     <div id="bleStatus" class="status-badge disconnected">未连接</div>
 
@@ -29,42 +26,30 @@
 
     <hr>
 
-    <h3>🟣 MQTT 配置（BLE 下发）</h3>
-    <input id="mqttHost" placeholder="Broker 地址（如 broker.hivemq.com）">
-    <input id="mqttPort" type="number" placeholder="端口（HiveMQ Cloud 用 8883）" value="8883">
-    <input id="mqttUser" placeholder="MQTT 用户名（可空）">
-    <input id="mqttPassInput" type="password" placeholder="MQTT 密码（可空）">
-    <button id="sendMqttBtn" disabled>下发 MQTT 配置</button>
-
-    <hr>
-
     <h3>🟢 ESP32 反馈</h3>
-    <button id="clearBleBtn" class="btn-sm">清空日志</button>
+    <button id="clearBtn" class="btn-sm">清空</button>
     <pre id="bleLog"></pre>
   </div>
 
-  <!-- ========== MQTT / OTA ========== -->
   <div class="panel">
-    <h3>📡 浏览器 MQTT 连接</h3>
-    <p class="hint">用于从浏览器直接推送指令（需要 WSS broker）</p>
-    <input id="mqttWsUrl" placeholder="wss://broker.hivemq.com:8884/mqtt">
-    <input id="mqttWsUser" placeholder="MQTT 用户名（可空）">
-    <input id="mqttWsPass" type="password" placeholder="MQTT 密码（可空）">
-    <button id="mqttConnectBtn">连接 MQTT</button>
-    <div id="mqttStatus" class="status-badge disconnected">未连接</div>
+    <h3>ℹ️ 使用说明</h3>
+    <div class="info-box">
+      <p><strong>第一步：</strong>点击「连接 ESP32」，选择 <code>ESP32-Setup</code></p>
+      <p><strong>第二步：</strong>点击「扫描 WiFi」，选择你的网络并输入密码</p>
+      <p><strong>第三步：</strong>点击「连接 WiFi」，等待 ESP32 反馈 <code>wifi_ok</code></p>
+      <p><strong>OTA 更新：</strong>WiFi 连接成功后，在 Arduino 串口监视器输入 <code>1</code> 回车触发 OTA</p>
+    </div>
 
     <hr>
 
-    <h3>🚀 OTA 升级</h3>
-    <p class="hint">通过 MQTT 推送固件 URL 给 ESP32</p>
-    <input id="firmwareUrl" placeholder="http://yourserver.com/firmware.bin">
-    <button id="otaBtn" disabled>推送 OTA 指令</button>
-
-    <hr>
-
-    <h3>📋 MQTT / OTA 日志</h3>
-    <button id="clearOtaBtn" class="btn-sm">清空日志</button>
-    <pre id="otaLog"></pre>
+    <h3>📋 状态说明</h3>
+    <div class="info-box">
+      <p><code>scanning</code> → 正在扫描 WiFi</p>
+      <p><code>scan_done</code> → 扫描完成</p>
+      <p><code>wifi_connecting</code> → 正在连接 WiFi</p>
+      <p><code>wifi_ok</code> → WiFi 连接成功</p>
+      <p><code>wifi_failed</code> → WiFi 连接失败</p>
+    </div>
   </div>
 
 </div>
